@@ -1,9 +1,11 @@
 
-import { ActivityContent } from '../types';
+import { ActivityContent, GenerationMode } from '../types';
 
 export const exportToPDF = (content: ActivityContent) => {
   const printWindow = window.open('', '_blank');
   if (!printWindow) return;
+
+  const isWorksheet = content.mode === GenerationMode.WORKSHEET;
 
   const html = `
     <html dir="rtl" lang="ar">
@@ -19,6 +21,11 @@ export const exportToPDF = (content: ActivityContent) => {
           .activity-card { border: 1px solid #e5e7eb; padding: 15px; border-radius: 8px; margin-bottom: 15px; }
           .game-box { background: #fef3c7; border: 2px dashed #d97706; padding: 20px; border-radius: 12px; margin-top: 20px; }
           .digital-box { background: #f0f9ff; border: 1px solid #bae6fd; padding: 15px; border-radius: 12px; margin-bottom: 10px; }
+          .worksheet-section { background: #f9fafb; border: 1px solid #e5e7eb; padding: 20px; border-radius: 15px; margin-bottom: 20px; }
+          .question { margin-bottom: 15px; }
+          .options { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-right: 20px; }
+          .option { font-size: 14px; border: 1px solid #d1d5db; padding: 5px 10px; border-radius: 5px; }
+          .essay-line { border-bottom: 1px dashed #9ca3af; height: 30px; margin-right: 20px; }
           .link-to-obj { font-size: 13px; color: #059669; font-style: italic; margin-top: 5px; }
           .footer { margin-top: 50px; text-align: center; font-size: 12px; color: #666; border-top: 1px solid #eee; padding-top: 20px; }
           @media print { .no-print { display: none; } }
@@ -26,14 +33,14 @@ export const exportToPDF = (content: ActivityContent) => {
       </head>
       <body>
         <div class="header">
-          <div class="title">نشاط صفي تفاعلي: ${content.title}</div>
+          <div class="title">${isWorksheet ? 'ورقة عمل' : 'نشاط صفي تفاعلي'}: ${content.title}</div>
           <div>المبحث: ${content.subject} | الفصل الدراسي: ${content.semester}</div>
           <div style="margin-top: 10px; font-weight: bold;">إعداد المعلمة: رانية شريم</div>
           <div style="font-size: 14px;">مدرسة بنات عمر بن عبد العزيز الثانوية</div>
         </div>
 
         <div class="section">
-          <div class="section-title">🎯 الهدف التعليمي:</div>
+          <div class="section-title">🎯 الأهداف التعليمية:</div>
           <p>${content.objective}</p>
         </div>
 
@@ -43,6 +50,7 @@ export const exportToPDF = (content: ActivityContent) => {
           <ul>${content.toolsNeeded.map(tool => `<li>${tool}</li>`).join('')}</ul>
         </div>` : ''}
 
+        ${!isWorksheet && content.interactiveActivities ? `
         <div class="section">
           <div class="section-title">🌟 الأنشطة التفاعلية المقترحة:</div>
           ${content.interactiveActivities.map(act => `
@@ -52,13 +60,41 @@ export const exportToPDF = (content: ActivityContent) => {
               <ul style="font-size: 14px;">${act.instructions.map(ins => `<li>${ins}</li>`).join('')}</ul>
             </div>
           `).join('')}
-        </div>
+        </div>` : ''}
 
+        ${!isWorksheet && content.competitiveGame ? `
         <div class="game-box">
           <div class="section-title" style="border-right-color: #d97706; color: #92400e;">🏆 اللعبة التنافسية الكبرى: ${content.competitiveGame.name}</div>
           <p><strong>طريقة التنفيذ:</strong> ${content.competitiveGame.suggestedFormat}</p>
           <ul>${content.competitiveGame.rules.map(rule => `<li>${rule}</li>`).join('')}</ul>
-        </div>
+        </div>` : ''}
+
+        ${isWorksheet && content.worksheetSections ? `
+        <div class="section">
+          <div class="section-title">📝 محتوى ورقة العمل:</div>
+          ${content.worksheetSections.map(section => `
+            <div class="worksheet-section">
+              <h3 style="color: #047857; border-bottom: 1px solid #d1fae5; padding-bottom: 5px;">${section.title}</h3>
+              ${section.questions.map((q, i) => `
+                <div class="question">
+                  <p><strong>${i + 1}. ${q.question}</strong></p>
+                  ${q.options ? `
+                    <div class="options">
+                      ${q.options.map((opt, j) => `<div class="option">${String.fromCharCode(97 + j)}) ${opt}</div>`).join('')}
+                    </div>
+                  ` : ''}
+                  ${q.type === 'essay' ? `
+                    <div class="essay-line"></div>
+                    <div class="essay-line"></div>
+                  ` : ''}
+                  ${q.type === 'true_false' ? `
+                    <div style="margin-right: 20px;">( ) نعم &nbsp;&nbsp;&nbsp; ( ) لا</div>
+                  ` : ''}
+                </div>
+              `).join('')}
+            </div>
+          `).join('')}
+        </div>` : ''}
 
         ${content.electronicLinks?.length ? `
         <div class="section" style="margin-top: 20px;">

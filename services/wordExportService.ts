@@ -1,9 +1,11 @@
 
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } from 'docx';
-import { ActivityContent } from '../types';
+import { ActivityContent, GenerationMode } from '../types';
 import { SCHOOL_INFO } from '../constants';
 
 export const exportToWord = async (content: ActivityContent) => {
+  const isWorksheet = content.mode === GenerationMode.WORKSHEET;
+
   const doc = new Document({
     sections: [
       {
@@ -29,7 +31,7 @@ export const exportToWord = async (content: ActivityContent) => {
             spacing: { after: 400 },
           }),
           new Paragraph({
-            text: `خطة نشاط صفي تفاعلي: ${content.title}`,
+            text: `${isWorksheet ? 'ورقة عمل' : 'خطة نشاط صفي تفاعلي'}: ${content.title}`,
             heading: HeadingLevel.HEADING_2,
             alignment: AlignmentType.RIGHT,
           }),
@@ -42,7 +44,7 @@ export const exportToWord = async (content: ActivityContent) => {
             alignment: AlignmentType.CENTER,
           }),
           new Paragraph({
-            children: [new TextRun({ text: "الهدف من النشاط:", bold: true })],
+            children: [new TextRun({ text: isWorksheet ? "الأهداف التعليمية:" : "الهدف من النشاط:", bold: true })],
             alignment: AlignmentType.RIGHT,
           }),
           new Paragraph({
@@ -57,37 +59,77 @@ export const exportToWord = async (content: ActivityContent) => {
             }),
             ...content.toolsNeeded.map(tool => new Paragraph({ text: `• ${tool}`, alignment: AlignmentType.RIGHT }))
           ] : []),
-          new Paragraph({
-            children: [new TextRun({ text: "الأنشطة التفاعلية:", bold: true })],
-            alignment: AlignmentType.RIGHT,
-            spacing: { before: 400 },
-          }),
-          ...content.interactiveActivities.flatMap(act => [
+
+          // Conditional Rendering based on Mode
+          ...(!isWorksheet && content.interactiveActivities ? [
             new Paragraph({
-              children: [new TextRun({ text: `نشاط [${act.type}]: ${act.title}`, italic: true, bold: true })],
+              children: [new TextRun({ text: "الأنشطة التفاعلية:", bold: true })],
               alignment: AlignmentType.RIGHT,
-              spacing: { before: 200 },
+              spacing: { before: 400 },
+            }),
+            ...content.interactiveActivities.flatMap(act => [
+              new Paragraph({
+                children: [new TextRun({ text: `نشاط [${act.type}]: ${act.title}`, italics: true, bold: true })],
+                alignment: AlignmentType.RIGHT,
+                spacing: { before: 200 },
+              }),
+              new Paragraph({
+                text: act.description,
+                alignment: AlignmentType.RIGHT,
+              }),
+              ...act.instructions.map(ins => new Paragraph({ text: `- ${ins}`, alignment: AlignmentType.RIGHT }))
+            ])
+          ] : []),
+
+          ...(!isWorksheet && content.competitiveGame ? [
+            new Paragraph({
+              children: [new TextRun({ text: "اللعبة التنافسية الكبرى:", bold: true })],
+              alignment: AlignmentType.RIGHT,
+              spacing: { before: 400 },
             }),
             new Paragraph({
-              text: act.description,
+              text: `اسم اللعبة: ${content.competitiveGame.name}`,
               alignment: AlignmentType.RIGHT,
             }),
-            ...act.instructions.map(ins => new Paragraph({ text: `- ${ins}`, alignment: AlignmentType.RIGHT }))
-          ]),
-          new Paragraph({
-            children: [new TextRun({ text: "اللعبة التنافسية الكبرى:", bold: true })],
-            alignment: AlignmentType.RIGHT,
-            spacing: { before: 400 },
-          }),
-          new Paragraph({
-            text: `اسم اللعبة: ${content.competitiveGame.name}`,
-            alignment: AlignmentType.RIGHT,
-          }),
-          new Paragraph({
-            text: `الشكل المقترح: ${content.competitiveGame.suggestedFormat}`,
-            alignment: AlignmentType.RIGHT,
-          }),
-          ...content.competitiveGame.rules.map(rule => new Paragraph({ text: `• ${rule}`, alignment: AlignmentType.RIGHT })),
+            new Paragraph({
+              text: `الشكل المقترح: ${content.competitiveGame.suggestedFormat}`,
+              alignment: AlignmentType.RIGHT,
+            }),
+            ...content.competitiveGame.rules.map(rule => new Paragraph({ text: `• ${rule}`, alignment: AlignmentType.RIGHT }))
+          ] : []),
+
+          ...(isWorksheet && content.worksheetSections ? [
+            new Paragraph({
+              children: [new TextRun({ text: "محتوى ورقة العمل:", bold: true })],
+              alignment: AlignmentType.RIGHT,
+              spacing: { before: 400 },
+            }),
+            ...content.worksheetSections.flatMap(section => [
+              new Paragraph({
+                children: [new TextRun({ text: section.title, bold: true, size: 28 })],
+                alignment: AlignmentType.RIGHT,
+                spacing: { before: 300, after: 200 },
+              }),
+              ...section.questions.flatMap((q, idx) => [
+                new Paragraph({
+                  children: [new TextRun({ text: `${idx + 1}. ${q.question}`, bold: true })],
+                  alignment: AlignmentType.RIGHT,
+                  spacing: { before: 200 },
+                }),
+                ...(q.options ? [
+                  new Paragraph({
+                    text: q.options.map((opt, oIdx) => `${String.fromCharCode(97 + oIdx)}) ${opt}`).join("    "),
+                    alignment: AlignmentType.RIGHT,
+                  })
+                ] : []),
+                ...(q.type === 'essay' ? [
+                  new Paragraph({ text: "__________________________________________________________________", alignment: AlignmentType.RIGHT }),
+                  new Paragraph({ text: "__________________________________________________________________", alignment: AlignmentType.RIGHT })
+                ] : [])
+              ])
+            ])
+          ] : []),
+
           ...(content.electronicLinks?.length ? [
             new Paragraph({
               children: [new TextRun({ text: "الموارد الرقمية والأنشطة التفاعلية:", bold: true })],
@@ -104,7 +146,7 @@ export const exportToWord = async (content: ActivityContent) => {
                 alignment: AlignmentType.RIGHT,
               }),
               new Paragraph({
-                children: [new TextRun({ text: `الارتباط بالهدف: ${link.linkToObjective}`, italic: true })],
+                children: [new TextRun({ text: `الارتباط بالهدف: ${link.linkToObjective}`, italics: true })],
                 alignment: AlignmentType.RIGHT,
                 spacing: { after: 200 },
               })
@@ -128,7 +170,7 @@ export const exportToWord = async (content: ActivityContent) => {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.download = `نشاط_${content.title}.docx`;
+  link.download = `${isWorksheet ? 'ورقة_عمل' : 'نشاط'}_${content.title}.docx`;
   link.click();
   URL.revokeObjectURL(url);
 };
